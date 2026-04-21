@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 
 const apiClient = axios.create({
     // Empty uses same origin so Vite dev proxy can forward /api → Django (see vite.config.ts).
-    baseURL: import.meta.env.VITE_BASE_URL ?? '',
+    baseURL: import.meta.env.VITE_API_URL,
     headers: {
         'Content-Type': 'application/json',
     }

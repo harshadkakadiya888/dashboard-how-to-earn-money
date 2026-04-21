@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_BASE_URL ?? '';
+const API = import.meta.env.VITE_API_URL;
 
 /** Keys shared with AuthContext for SimpleJWT access/refresh. */
 export const AUTH_ACCESS_TOKEN_KEY = 'auth:access';
@@ -6,7 +6,7 @@ export const AUTH_REFRESH_TOKEN_KEY = 'auth:refresh';
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http')) return path;
-  return `${API_BASE}${path}`;
+  return `${API}${path}`;
 }
 
 function readAccessToken(): string | null {

@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import axios from "axios";
 
-import { apiUrl, AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
+import { AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
+
+const API = import.meta.env.VITE_API_URL;
 
 // Dashboard login: email/password checked here; JWT uses Django username (must match seed_dummy_notifications).
 export const STATIC_CREDENTIALS = {
@@ -57,22 +60,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await new Promise((r) => setTimeout(r, 250)); // tiny delay for UX
     if (!ok) throw new Error("Invalid email or password");
 
-    const tokenRes = await fetch(apiUrl("/api/auth/token/"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        username: STATIC_CREDENTIALS.djangoUsername,
-        password,
-      }),
-    });
-    const raw = await tokenRes.text();
-    let body: { access?: string; refresh?: string; detail?: string };
+    const data = {
+      username: STATIC_CREDENTIALS.djangoUsername,
+      password,
+    };
+    let body: { access?: string; refresh?: string; detail?: string } = {};
     try {
-      body = raw ? JSON.parse(raw) : {};
-    } catch {
-      body = {};
+      const tokenRes = await axios.post(`${API}/api/auth/token/`, data, {
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+      });
+      body = tokenRes.data ?? {};
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
+      }
     }
-    if (!tokenRes.ok || !body.access) {
+    if (!body.access) {
       const detail =
         typeof body.detail === "string"
           ? body.detail
