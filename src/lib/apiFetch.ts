@@ -20,6 +20,7 @@ function readAccessToken(): string | null {
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = readAccessToken();
   const headers = new Headers(init?.headers as HeadersInit | undefined);
+  headers.set('ngrok-skip-browser-warning', 'true');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }

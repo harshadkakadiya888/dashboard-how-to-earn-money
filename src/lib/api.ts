@@ -1,13 +1,7 @@
-import axios from 'axios';
 import { toast } from 'sonner';
+import api from '@/services/api';
 
-const apiClient = axios.create({
-    // Empty uses same origin so Vite dev proxy can forward /api → Django (see vite.config.ts).
-    baseURL: import.meta.env.VITE_API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    }
-});
+const apiClient = api;
 
 apiClient.interceptors.response.use(
     response => response,

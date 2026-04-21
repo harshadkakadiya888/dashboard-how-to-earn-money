@@ -8,6 +8,9 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
       `https://api.cloudinary.com/v1_1/df4zm2q52/image/upload`,
       {
         method: "POST",
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+        },
         body: formData,
       }
     );

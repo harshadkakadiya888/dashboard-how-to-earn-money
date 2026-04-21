@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import api from "@/services/api";
 
 import { AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
 
-const API = import.meta.env.VITE_API_URL;
 
 // Dashboard login: email/password checked here; JWT uses Django username (must match seed_dummy_notifications).
 export const STATIC_CREDENTIALS = {
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     let body: { access?: string; refresh?: string; detail?: string } = {};
     try {
-      const tokenRes = await axios.post(`${API}/api/auth/token/`, data, {
+      const tokenRes = await api.post(`/api/auth/token/`, data, {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
       });
       body = tokenRes.data ?? {};
