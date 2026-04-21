@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useAuth, STATIC_CREDENTIALS } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),

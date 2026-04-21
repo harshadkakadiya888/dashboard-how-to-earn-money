@@ -4,15 +4,6 @@ import api from "@/services/api";
 
 import { AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
 
-
-// Dashboard login: email/password checked here; JWT uses Django username (must match seed_dummy_notifications).
-export const STATIC_CREDENTIALS = {
-  email: "darshilthummar@gmail.com",
-  password: "darshil01",
-  /** Must match a Django User.username (see `python manage.py seed_dummy_notifications`). */
-  djangoUsername: "darshilthummar",
-};
-
 const STORAGE_KEY = "auth:loggedIn";
 const USER_STORAGE_KEY = "auth:user";
 
@@ -30,6 +21,13 @@ function readStoredAccessToken(): string | null {
   } catch {
     return null;
   }
+}
+
+function candidateUsernames(email: string): string[] {
+  const trimmed = email.trim();
+  if (!trimmed) return [];
+  const localPart = trimmed.includes("@") ? trimmed.split("@")[0].trim() : "";
+  return Array.from(new Set([trimmed, localPart].filter(Boolean)));
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -56,30 +54,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const ok = email === STATIC_CREDENTIALS.email && password === STATIC_CREDENTIALS.password;
-    await new Promise((r) => setTimeout(r, 250)); // tiny delay for UX
-    if (!ok) throw new Error("Invalid email or password");
+    const usernames = candidateUsernames(email);
+    if (!usernames.length) {
+      throw new Error("Please enter a valid email");
+    }
 
-    const data = {
-      username: STATIC_CREDENTIALS.djangoUsername,
-      password,
-    };
     let body: { access?: string; refresh?: string; detail?: string } = {};
-    try {
-      const tokenRes = await api.post(`/api/auth/token/`, data, {
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-      });
-      body = tokenRes.data ?? {};
-    } catch (err) {
-      if (axios.isAxiosError(err)) {
-        body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
+    for (const username of usernames) {
+      try {
+        const tokenRes = await api.post(
+          `/api/auth/token/`,
+          { username, password },
+          { headers: { "Content-Type": "application/json", Accept: "application/json" } }
+        );
+        body = tokenRes.data ?? {};
+        if (body.access) break;
+      } catch (err) {
+        if (axios.isAxiosError(err)) {
+          body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
+        }
       }
     }
+
     if (!body.access) {
       const detail =
         typeof body.detail === "string"
           ? body.detail
-          : "Could not obtain API token. Start Django on port 8000 and run: python manage.py seed_dummy_notifications";
+          : "Invalid credentials. Please verify your backend user and password.";
       throw new Error(detail);
     }
     try {
