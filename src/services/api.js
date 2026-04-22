@@ -1,7 +1,8 @@
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL;
-const baseURL = import.meta.env.DEV ? "" : API;
+// Use same-origin API routes so Vercel rewrites can proxy backend
+// and avoid browser-side CORS failures.
+const baseURL = "";
 
 const api = axios.create({
   baseURL,

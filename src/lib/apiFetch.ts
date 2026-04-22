@@ -1,4 +1,5 @@
-const API = import.meta.env.VITE_API_URL;
+// Keep API calls same-origin; Vercel rewrites forward /api and /media.
+const API_BASE = '';
 
 /** Keys shared with AuthContext for SimpleJWT access/refresh. */
 export const AUTH_ACCESS_TOKEN_KEY = 'auth:access';
@@ -6,7 +7,7 @@ export const AUTH_REFRESH_TOKEN_KEY = 'auth:refresh';
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http')) return path;
-  return `${API}${path}`;
+  return `${API_BASE}${path}`;
 }
 
 function readAccessToken(): string | null {

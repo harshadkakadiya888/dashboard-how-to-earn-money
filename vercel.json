@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "http://65.1.84.53/api/$1" },
+    { "source": "/media/(.*)", "destination": "http://65.1.84.53/media/$1" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }
