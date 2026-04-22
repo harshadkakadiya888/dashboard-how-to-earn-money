@@ -6,6 +6,7 @@ import { AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
 
 const STORAGE_KEY = "auth:loggedIn";
 const USER_STORAGE_KEY = "auth:user";
+const API = import.meta.env.VITE_API_URL;
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -55,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let body: { access?: string; refresh?: string; detail?: string } = {};
     try {
       const tokenRes = await api.post(
-        `/api/auth/token/`,
+        `${API}/api/auth/token/`,
         { username: trimmedUsername, password },
         { headers: { "Content-Type": "application/json", Accept: "application/json" } }
       );

@@ -1,5 +1,5 @@
-// Keep API calls same-origin; Vercel rewrites forward /api and /media.
-const API_BASE = '';
+const API = import.meta.env.VITE_API_URL;
+const API_BASE = API;
 
 /** Keys shared with AuthContext for SimpleJWT access/refresh. */
 export const AUTH_ACCESS_TOKEN_KEY = 'auth:access';
