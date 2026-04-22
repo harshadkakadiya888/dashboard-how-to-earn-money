@@ -23,13 +23,6 @@ function readStoredAccessToken(): string | null {
   }
 }
 
-function candidateUsernames(email: string): string[] {
-  const trimmed = email.trim();
-  if (!trimmed) return [];
-  const localPart = trimmed.includes("@") ? trimmed.split("@")[0].trim() : "";
-  return Array.from(new Set([trimmed, localPart].filter(Boolean)));
-}
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
@@ -53,26 +46,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [isAuthenticated]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const usernames = candidateUsernames(email);
-    if (!usernames.length) {
-      throw new Error("Please enter a valid email");
+  const login = useCallback(async (username: string, password: string) => {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      throw new Error("Username is required");
     }
 
     let body: { access?: string; refresh?: string; detail?: string } = {};
-    for (const username of usernames) {
-      try {
-        const tokenRes = await api.post(
-          `/api/auth/token/`,
-          { username, password },
-          { headers: { "Content-Type": "application/json", Accept: "application/json" } }
-        );
-        body = tokenRes.data ?? {};
-        if (body.access) break;
-      } catch (err) {
-        if (axios.isAxiosError(err)) {
-          body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
-        }
+    try {
+      const tokenRes = await api.post(
+        `/api/auth/token/`,
+        { username: trimmedUsername, password },
+        { headers: { "Content-Type": "application/json", Accept: "application/json" } }
+      );
+      body = tokenRes.data ?? {};
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
       }
     }
 
@@ -92,9 +82,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ignore storage errors
     }
 
-    const username = email.split("@")[0] || "admin";
     try {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ username, email }));
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({ username: trimmedUsername }));
     } catch {
       // ignore storage errors
     }

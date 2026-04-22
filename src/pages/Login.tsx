@@ -12,7 +12,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { useAuth } from "@/context/AuthContext";
 
 const schema = z.object({
-  email: z.string().email("Enter a valid email"),
+  username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -26,7 +26,7 @@ const LoginPage: React.FC = () => {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { username: "", password: "" },
   });
 
   useEffect(() => {
@@ -51,7 +51,7 @@ const LoginPage: React.FC = () => {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      await login(values.email, values.password);
+      await login(values.username, values.password);
       toast.success("Logged in successfully");
       navigate(from, { replace: true });
     } catch (e: any) {
@@ -70,12 +70,12 @@ const LoginPage: React.FC = () => {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="email"
+                name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
+                      <Input type="text" placeholder="Enter your username" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
