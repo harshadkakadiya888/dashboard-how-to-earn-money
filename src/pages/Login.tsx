@@ -28,6 +28,7 @@ const LoginPage: React.FC = () => {
     resolver: zodResolver(schema),
     defaultValues: { username: "", password: "" },
   });
+  const [authError, setAuthError] = React.useState("");
 
   useEffect(() => {
     document.title = "Login | Admin";
@@ -50,12 +51,15 @@ const LoginPage: React.FC = () => {
   }, []);
 
   const onSubmit = async (values: FormValues) => {
+    setAuthError("");
     try {
       await login(values.username, values.password);
       toast.success("Logged in successfully");
       navigate(from, { replace: true });
     } catch (e: any) {
-      toast.error(e?.message || "Invalid credentials");
+      const message = e?.message || "Invalid credentials";
+      setAuthError(message);
+      toast.error(message);
     }
   };
 
@@ -96,7 +100,15 @@ const LoginPage: React.FC = () => {
                 )}
               />
 
-              <Button type="submit" className="w-full">Login</Button>
+              {authError ? (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {authError}
+                </p>
+              ) : null}
+
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Logging in..." : "Login"}
+              </Button>
 
             </form>
           </Form>

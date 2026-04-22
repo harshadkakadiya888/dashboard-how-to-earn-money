@@ -9,7 +9,7 @@ const USER_STORAGE_KEY = "auth:user";
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -63,6 +63,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       if (axios.isAxiosError(err)) {
         body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
+
+        // Browser-only errors (CORS, DNS, offline, mixed content) come without a response body.
+        if (!err.response) {
+          throw new Error(
+            "Network/CORS error: request did not reach API. Check CORS, API URL, and http/https mismatch.",
+          );
+        }
+
+        if (err.response.status === 401) {
+          throw new Error("Invalid credentials");
+        }
+
+        if (err.response.status >= 500) {
+          throw new Error("Server error. Please try again in a moment.");
+        }
       }
     }
 
