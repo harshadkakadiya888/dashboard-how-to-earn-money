@@ -22,12 +22,32 @@ const Index = () => {
       setLoading(true);
       setError(null);
       try {
-        const [postsRes, categoriesRes] = await Promise.all([
+        const [postsResult, categoriesResult] = await Promise.allSettled([
           apiFetchJson<{ posts: DashboardPost[] }>('/api/posts/'),
           apiFetchJson<{ categories: CategoryRow[] }>('/api/categories/'),
         ]);
-        setPosts(Array.isArray(postsRes.posts) ? postsRes.posts : []);
-        setCategories(Array.isArray(categoriesRes.categories) ? categoriesRes.categories : []);
+
+        const postsOk = postsResult.status === 'fulfilled';
+        const categoriesOk = categoriesResult.status === 'fulfilled';
+
+        if (postsOk) {
+          const postsRes = postsResult.value;
+          setPosts(Array.isArray(postsRes.posts) ? postsRes.posts : []);
+        } else {
+          setPosts([]);
+        }
+
+        if (categoriesOk) {
+          const categoriesRes = categoriesResult.value;
+          setCategories(Array.isArray(categoriesRes.categories) ? categoriesRes.categories : []);
+        } else {
+          setCategories([]);
+        }
+
+        if (!postsOk && !categoriesOk) {
+          throw new Error('Could not load posts and categories.');
+        }
+
         try {
           const a = await apiFetchJson<PostViewsAnalytics>('/api/analytics/post-views/');
           setAnalytics(a && Array.isArray(a.chart_series) ? a : null);
