@@ -2,11 +2,17 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import axios from "axios";
 import api from "@/services/api";
 
-import { AUTH_ACCESS_TOKEN_KEY, AUTH_REFRESH_TOKEN_KEY } from "@/lib/apiFetch";
+import { apiUrl } from "@/lib/apiFetch";
+import {
+  AUTH_ACCESS_TOKEN_KEY,
+  AUTH_LOGGED_IN_KEY,
+  AUTH_USER_KEY,
+  clearAuthStorage,
+  setAuthTokens,
+} from "@/lib/authTokens";
 
-const STORAGE_KEY = "auth:loggedIn";
-const USER_STORAGE_KEY = "auth:user";
-const API = import.meta.env.VITE_API_URL;
+const STORAGE_KEY = AUTH_LOGGED_IN_KEY;
+const USER_STORAGE_KEY = AUTH_USER_KEY;
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -56,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let body: { access?: string; refresh?: string; detail?: string } = {};
     try {
       const tokenRes = await api.post(
-        `${API}/api/auth/token/`,
+        apiUrl('/api/auth/token/'),
         { username: trimmedUsername, password },
         { headers: { "Content-Type": "application/json", Accept: "application/json" } }
       );
@@ -82,18 +88,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    if (!body.access) {
+    if (!body.access || !body.refresh) {
       const detail =
         typeof body.detail === "string"
           ? body.detail
-          : "Invalid credentials. Please verify your backend user and password.";
+          : "Login failed: access/refresh token not returned by API.";
       throw new Error(detail);
     }
     try {
-      localStorage.setItem(AUTH_ACCESS_TOKEN_KEY, body.access);
-      if (body.refresh) {
-        localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, body.refresh);
-      }
+      setAuthTokens(body.access, body.refresh);
     } catch {
       // ignore storage errors
     }
@@ -107,13 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(() => {
-    try {
-      localStorage.removeItem(USER_STORAGE_KEY);
-      localStorage.removeItem(AUTH_ACCESS_TOKEN_KEY);
-      localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY);
-    } catch {
-      // ignore storage errors
-    }
+    clearAuthStorage();
     setIsAuthenticated(false);
   }, []);
 

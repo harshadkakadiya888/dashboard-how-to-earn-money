@@ -1,9 +1,7 @@
-const API = import.meta.env.VITE_API_URL;
-const API_BASE = API;
+import { clearAuthStorage, getAccessToken, getRefreshToken, redirectToLogin, setAccessToken } from './authTokens';
 
-/** Keys shared with AuthContext for SimpleJWT access/refresh. */
-export const AUTH_ACCESS_TOKEN_KEY = 'auth:access';
-export const AUTH_REFRESH_TOKEN_KEY = 'auth:refresh';
+const API = (import.meta.env.VITE_API_URL || 'https://django-how-to-earn-money.onrender.com').replace(/\/$/, '');
+const API_BASE = API;
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http')) return path;
@@ -11,11 +9,52 @@ export function apiUrl(path: string): string {
 }
 
 function readAccessToken(): string | null {
-  try {
-    return localStorage.getItem(AUTH_ACCESS_TOKEN_KEY);
-  } catch {
-    return null;
+  return getAccessToken();
+}
+
+function isAuthPath(path: string): boolean {
+  return path.includes('/api/auth/token/') || path.includes('/api/token/');
+}
+
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+
+  const refresh = getRefreshToken();
+  if (!refresh) {
+    clearAuthStorage();
+    redirectToLogin();
+    throw new Error('Session expired. Please log in again.');
   }
+
+  refreshPromise = fetch(apiUrl('/api/token/refresh/'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+    body: JSON.stringify({ refresh }),
+  })
+    .then(async (res) => {
+      const text = await res.text();
+      const parsed = text ? JSON.parse(text) : {};
+      if (!res.ok || typeof parsed.access !== 'string' || !parsed.access) {
+        throw new Error('Token refresh failed.');
+      }
+      setAccessToken(parsed.access);
+      return parsed.access as string;
+    })
+    .catch((err) => {
+      clearAuthStorage();
+      redirectToLogin();
+      throw err;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
 }
 
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -25,7 +64,18 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(apiUrl(path), { ...init, headers });
+
+  const first = await fetch(apiUrl(path), { ...init, headers });
+  if (first.status !== 401 || isAuthPath(path)) {
+    return first;
+  }
+
+  // Access token may have expired; refresh once and retry.
+  const nextAccess = await refreshAccessToken();
+  const retryHeaders = new Headers(init?.headers as HeadersInit | undefined);
+  retryHeaders.set('ngrok-skip-browser-warning', 'true');
+  retryHeaders.set('Authorization', `Bearer ${nextAccess}`);
+  return fetch(apiUrl(path), { ...init, headers: retryHeaders });
 }
 
 function parseErrorBody(body: unknown): string {
