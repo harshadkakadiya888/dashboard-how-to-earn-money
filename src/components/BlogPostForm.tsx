@@ -183,6 +183,8 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
       payload.append('read_time', formData.readTime || '');
       payload.append('category', formData.category || '');
       payload.append('slug', formData.slug);
+      // Public site only shows published posts for non-staff users.
+      payload.append('status', 'published');
       payload.append('article_summary', formData.articleSummary);
       payload.append('faqs_json', JSON.stringify(formData.faqs));
       payload.append('tags', JSON.stringify(formData.tags));
