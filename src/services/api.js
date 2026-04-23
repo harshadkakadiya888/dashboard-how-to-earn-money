@@ -1,18 +1,21 @@
 import axios from "axios";
 import { clearAuthStorage, getAccessToken, getRefreshToken, redirectToLogin, setAccessToken } from "@/lib/authTokens";
 
-const API = (import.meta.env.VITE_API_URL || "https://django-how-to-earn-money.onrender.com").replace(/\/$/, "");
-const baseURL = API;
+const API_ORIGIN = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+const baseURL = API_ORIGIN;
 
 const api = axios.create({
   baseURL,
   headers: {
     "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true",
   },
 });
 
 let refreshPromise = null;
+const authApi = axios.create({
+  baseURL,
+  headers: { "Content-Type": "application/json" },
+});
 
 const isAuthRoute = (url = "") => {
   return url.includes("/api/auth/token/") || url.includes("/api/token/");
@@ -28,8 +31,8 @@ const refreshAccessToken = async () => {
     throw new Error("Session expired. Please log in again.");
   }
 
-  refreshPromise = axios
-    .post(`${API}/api/token/refresh/`, { refresh }, { headers: { "Content-Type": "application/json" } })
+  refreshPromise = authApi
+    .post(`/api/token/refresh/`, { refresh })
     .then((res) => {
       const nextAccess = res?.data?.access;
       if (!nextAccess) throw new Error("Token refresh failed.");
@@ -59,6 +62,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (!error?.response) {
+      // Browser-only errors (CORS, DNS, offline, mixed content) come without a response body.
+      console.error("Network/CORS error (no response):", {
+        message: error?.message,
+        url: error?.config?.baseURL ? `${error.config.baseURL}${error.config.url || ""}` : error?.config?.url,
+        method: error?.config?.method,
+      });
+    }
     const originalRequest = error?.config;
     const status = error?.response?.status;
 

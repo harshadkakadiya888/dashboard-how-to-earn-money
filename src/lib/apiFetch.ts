@@ -1,6 +1,6 @@
 import { clearAuthStorage, getAccessToken, getRefreshToken, redirectToLogin, setAccessToken } from './authTokens';
 
-const API = (import.meta.env.VITE_API_URL || 'https://django-how-to-earn-money.onrender.com').replace(/\/$/, '');
+const API = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const API_BASE = API;
 
 export function apiUrl(path: string): string {
@@ -32,7 +32,6 @@ async function refreshAccessToken(): Promise<string> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({ refresh }),
   })
@@ -60,22 +59,28 @@ async function refreshAccessToken(): Promise<string> {
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const token = readAccessToken();
   const headers = new Headers(init?.headers as HeadersInit | undefined);
-  headers.set('ngrok-skip-browser-warning', 'true');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const first = await fetch(apiUrl(path), { ...init, headers });
+  const url = apiUrl(path);
+  const first = await fetch(url, { ...init, headers });
   if (first.status !== 401 || isAuthPath(path)) {
+    if (!first.ok) {
+      console.error('API request failed:', { url, status: first.status, statusText: first.statusText });
+    }
     return first;
   }
 
   // Access token may have expired; refresh once and retry.
   const nextAccess = await refreshAccessToken();
   const retryHeaders = new Headers(init?.headers as HeadersInit | undefined);
-  retryHeaders.set('ngrok-skip-browser-warning', 'true');
   retryHeaders.set('Authorization', `Bearer ${nextAccess}`);
-  return fetch(apiUrl(path), { ...init, headers: retryHeaders });
+  const retry = await fetch(url, { ...init, headers: retryHeaders });
+  if (!retry.ok) {
+    console.error('API retry failed:', { url, status: retry.status, statusText: retry.statusText });
+  }
+  return retry;
 }
 
 function parseErrorBody(body: unknown): string {

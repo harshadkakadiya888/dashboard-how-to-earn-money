@@ -62,13 +62,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let body: { access?: string; refresh?: string; detail?: string } = {};
     try {
       const tokenRes = await api.post(
-        apiUrl('/api/auth/token/'),
+        // Backend uses SimpleJWT (see `backend/config/config/urls.py`)
+        apiUrl('/api/token/'),
         { username: trimmedUsername, password },
         { headers: { "Content-Type": "application/json", Accept: "application/json" } }
       );
       body = tokenRes.data ?? {};
     } catch (err) {
       if (axios.isAxiosError(err)) {
+        console.error("Login request failed:", {
+          message: err.message,
+          url: err.config?.baseURL ? `${err.config.baseURL}${err.config.url || ""}` : err.config?.url,
+          method: err.config?.method,
+          status: err.response?.status,
+          data: err.response?.data,
+        });
         body = (err.response?.data ?? {}) as { access?: string; refresh?: string; detail?: string };
 
         // Browser-only errors (CORS, DNS, offline, mixed content) come without a response body.
@@ -85,7 +93,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (err.response.status >= 500) {
           throw new Error("Server error. Please try again in a moment.");
         }
+        throw new Error("Login failed. Please check your credentials and try again.");
       }
+      console.error("Unexpected login error:", err);
+      throw err instanceof Error ? err : new Error("Login failed.");
     }
 
     if (!body.access || !body.refresh) {
