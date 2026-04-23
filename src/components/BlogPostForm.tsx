@@ -196,7 +196,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
       const url = isEditing
         ? apiUrl(`/api/posts/${curruntPost?._id}/`)
         : apiUrl('/api/posts/');
-      const method = isEditing ? 'PUT' : 'POST';
+      const method = isEditing ? 'PATCH' : 'POST';
 
       const res = await apiFetch(url, {
         method,
