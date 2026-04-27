@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 import { apiFetchJson } from "@/lib/apiFetch";
+import { NOTIFICATIONS_UPDATED_EVENT } from "@/lib/notificationsDisplay";
 
 const navItems = [
     { href: "/", icon: Home, label: "Dashboard" },
@@ -66,6 +67,18 @@ export function Layout() {
             }
         };
         loadUnread();
+        const onUpdated = () => {
+            void loadUnread();
+        };
+        const onVis = () => {
+            if (document.visibilityState === "visible") void loadUnread();
+        };
+        window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdated);
+        document.addEventListener("visibilitychange", onVis);
+        return () => {
+            window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, onUpdated);
+            document.removeEventListener("visibilitychange", onVis);
+        };
     }, [pathname]);
 
     return (
@@ -77,15 +90,6 @@ export function Layout() {
                             <Package2 className="h-6 w-6" />
                             <span className="">FinBolg Inc</span>
                         </Link>
-                        <Button variant="outline" size="icon" className="ml-auto h-8 w-8 relative" onClick={() => navigate('/notifications')}>
-                            <Bell className="h-4 w-4" />
-                            {unreadCount > 0 && (
-                                <span className="absolute -top-1 -right-1 min-w-4 h-4 rounded-full bg-red-500 text-[10px] text-white px-1 flex items-center justify-center">
-                                    {unreadCount > 99 ? '99+' : unreadCount}
-                                </span>
-                            )}
-                            <span className="sr-only">Toggle notifications</span>
-                        </Button>
                     </div>
                     <div className="flex-1">
                         <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
@@ -137,7 +141,7 @@ export function Layout() {
                         </SheetContent>
                     </Sheet>
 
-                    <div className="w-full flex-1">
+                    <div className="w-full flex-1 flex items-center min-w-0">
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
@@ -166,6 +170,21 @@ export function Layout() {
                             </BreadcrumbList>
                         </Breadcrumb>
                     </div>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0 h-9 w-9 relative"
+                        onClick={() => navigate("/notifications")}
+                        title="Notifications"
+                    >
+                        <Bell className="h-4 w-4" />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground px-1 flex items-center justify-center">
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                        )}
+                        <span className="sr-only">Open notifications</span>
+                    </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="secondary" size="icon" className="rounded-full">

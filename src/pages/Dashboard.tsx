@@ -1,3 +1,4 @@
+import ViewsChart from "../components/ViewsChart";
 import { FileText, Folder, Activity, DollarSign, ArrowUpRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -204,6 +205,18 @@ export default function Dashboard({
           <Card>
             <CardHeader>
               <CardTitle>Post views (low → high)</CardTitle>
+              <CardDescription>
+                Each bar is total page views for that post.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="pl-0">
+              <ViewsChart data={analytics.chart_series.slice(0, 10)} />
+            </CardContent>
+          </Card>
+          {/* <Card>
+            <CardHeader>
+              <CardTitle>Post views (low → high)</CardTitle>
               <CardDescription>Each bar is total page views for that post.</CardDescription>
             </CardHeader>
             <CardContent className="pl-0">
@@ -221,7 +234,7 @@ export default function Dashboard({
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
-          </Card>
+          </Card> */}
           <Card>
             <CardHeader>
               <CardTitle>Most viewed posts</CardTitle>

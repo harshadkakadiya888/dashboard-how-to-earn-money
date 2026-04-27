@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Bold,
   Italic,
@@ -128,52 +128,61 @@ const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
     }).run();
   };
 
-const editor = useEditor({
-  extensions: [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3] },
-    }),
-    Underline,
-    TextStyle,
-    Color.configure({ types: [TextStyle.name, 'textStyle'] }),
-    Highlight.configure({ multicolor: true }),
-    TextAlign.configure({ types: ['heading', 'paragraph'] }),
-    Placeholder.configure({ placeholder: 'Start typing…' }),
-    Subscript,
-    Superscript,
-    TaskList,
-    TaskItem,
-    Callout,
-    Image.configure({
-      HTMLAttributes: { class: 'max-w-full h-auto rounded-lg' },
-    }),
-    Link.configure({
-      openOnClick: false,
-      HTMLAttributes: { class: 'text-blue-600 underline' },
-    }),
-    CodeBlock.configure({
-      HTMLAttributes: { class: 'bg-gray-100 p-4 rounded-lg font-mono text-sm' },
-    }),
-    Table.configure({
-      resizable: true,
-      HTMLAttributes: { class: 'min-w-full border border-gray-300' },
-    }),
-    TableRow,
-    TableHeader,
-    TableCell,
-    Youtube.configure({ controls: false, nocookie: true }),
-    CharacterCount,
-  ],
-  content,
-  onUpdate: ({ editor }) => {
-    onChange(editor.getHTML());
-  },
-  editorProps: {
-    attributes: {
-      class: 'focus:outline-none min-h-[300px] p-4 rich-text-editor',
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      Underline,
+      TextStyle,
+      Color.configure({ types: [TextStyle.name, 'textStyle'] }),
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Placeholder.configure({ placeholder: 'Start typing…' }),
+      Subscript,
+      Superscript,
+      TaskList,
+      TaskItem,
+      Callout,
+      Image.configure({
+        HTMLAttributes: { class: 'max-w-full h-auto rounded-lg' },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: 'text-blue-600 underline' },
+      }),
+      CodeBlock.configure({
+        HTMLAttributes: { class: 'bg-gray-100 p-4 rounded-lg font-mono text-sm' },
+      }),
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: { class: 'min-w-full border border-gray-300' },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Youtube.configure({ controls: false, nocookie: true }),
+      CharacterCount,
+    ],
+    content,
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
     },
-  },
-});
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none min-h-[300px] p-4 rich-text-editor',
+      },
+    },
+  });
+
+  // TipTap only uses `content` on first mount — sync when parent updates (e.g. AI generate).
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const next = content ?? '';
+    const current = editor.getHTML();
+    if (next === current) return;
+    editor.commands.setContent(next, false);
+  }, [editor, content]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

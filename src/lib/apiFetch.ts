@@ -83,17 +83,32 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   return retry;
 }
 
-function parseErrorBody(body: unknown): string {
-  if (!body || typeof body !== 'object') return 'Request failed';
+function parseErrorBody(body: unknown, rawText: string, status: number): string {
+  const head = (rawText || '').trim().slice(0, 400);
+  const fallback = head ? `HTTP ${status}: ${head}` : `HTTP ${status} ${status === 502 ? 'Bad Gateway' : ''}`.trim();
+
+  if (body === null || body === undefined) return fallback || 'Request failed';
+  if (typeof body !== 'object') return fallback || 'Request failed';
+
   const o = body as Record<string, unknown>;
-  if (typeof o.detail === 'string') return o.detail;
-  if (Array.isArray(o.detail)) return JSON.stringify(o.detail);
+
+  if (typeof o.detail === 'string' && o.detail.trim()) return o.detail.trim();
+  if (Array.isArray(o.detail) && o.detail.length) return JSON.stringify(o.detail);
+
+  const err = o.error;
+  if (err && typeof err === 'object' && err !== null) {
+    const em = (err as Record<string, unknown>).message;
+    if (typeof em === 'string' && em.trim()) return em.trim();
+  }
+  if (typeof err === 'string' && err.trim()) return err.trim();
+
   const parts: string[] = [];
   for (const [k, v] of Object.entries(o)) {
-    if (k === 'detail') continue;
+    if (k === 'detail' || k === 'error') continue;
     parts.push(`${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
   }
-  return parts.length ? parts.join(' ') : 'Request failed';
+  if (parts.length) return parts.join(' ');
+  return fallback || 'Request failed';
 }
 
 export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -104,9 +119,9 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
     try {
       parsed = text ? JSON.parse(text) : {};
     } catch {
-      parsed = {};
+      parsed = null;
     }
-    throw new Error(parseErrorBody(parsed) || res.statusText);
+    throw new Error(parseErrorBody(parsed, text, res.status) || res.statusText);
   }
   return text ? (JSON.parse(text) as T) : (null as unknown as T);
 }
@@ -119,8 +134,8 @@ export async function apiFetchVoid(path: string, init?: RequestInit): Promise<vo
     try {
       parsed = text ? JSON.parse(text) : {};
     } catch {
-      parsed = {};
+      parsed = null;
     }
-    throw new Error(parseErrorBody(parsed) || res.statusText);
+    throw new Error(parseErrorBody(parsed, text, res.status) || res.statusText);
   }
 }

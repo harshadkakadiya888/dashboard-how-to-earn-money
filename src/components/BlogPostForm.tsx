@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from './RichTextEditor';
 import { toast } from 'sonner';
-import { ImageIcon, Save, Eye, X } from 'lucide-react';
-import { apiFetch, apiUrl } from '@/lib/apiFetch';
+import { ImageIcon, Loader2, Save, Eye, X } from 'lucide-react';
+import { apiFetch, apiFetchJson, apiUrl } from '@/lib/apiFetch';
 
 interface Category {
   _id: string;
@@ -37,6 +37,52 @@ interface BlogPostFormProps {
   curruntPost?: CurruntPost;
 }
 
+type BlogFormState = {
+  title: string;
+  excerpt: string;
+  content: string;
+  author: string;
+  readTime: string;
+  tags: string[];
+  category: string;
+  slug: string;
+  articleSummary: string;
+  faqs: { question: string; answer: string }[];
+};
+
+/** Response from POST /api/generate-post/ (structured; backend defaults structured on). */
+type GeneratePostApiResponse = {
+  title?: string;
+  content?: string;
+  summary?: string;
+  faqs?: string[];
+};
+
+/** "Q1|||A1" → { question: "Q1", answer: "A1" } */
+function parseFaqPipeStrings(items: string[]): { question: string; answer: string }[] {
+  return items
+    .map((s) => {
+      const t = String(s).trim();
+      if (!t) return null;
+      const idx = t.indexOf('|||');
+      if (idx === -1) return { question: t, answer: '' };
+      return { question: t.slice(0, idx).trim(), answer: t.slice(idx + 3).trim() };
+    })
+    .filter((x): x is { question: string; answer: string } => Boolean(x && (x.question || x.answer)));
+}
+
+/** Tags from the first `maxWords` words of the title (normalized, deduped). */
+function tagsFromTitleWords(title: string, maxWords = 5): string[] {
+  const words = title
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, maxWords)
+    .map((w) => w.replace(/[^a-zA-Z0-9-]/g, '').toLowerCase())
+    .filter(Boolean);
+  return [...new Set(words)];
+}
+
 /** Same key as AuthContext — username is used as Post.author for notification routing. */
 function defaultAuthorFromSession(): string {
   try {
@@ -53,7 +99,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
   const isEditing = !!curruntPost?._id;
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState<BlogFormState>({
     title: curruntPost?.title || '',
     excerpt: curruntPost?.excerpt || '',
     content: curruntPost?.content || '',
@@ -73,13 +119,14 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
   const [selectedImage, setSelectedImage] = useState<File | string | null>(curruntPost?.image || null);
   const [imagePreview, setImagePreview] = useState<string>(curruntPost?.image || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tagInput, setTagInput] = useState('');
 
   const handleInputChange = (field: string, value: unknown) => {
     if (field === 'title') {
-      setFormData((prev) => {
+      setForm((prev) => {
         const title = String(value);
         const next = { ...prev, title };
         if (!prev.slug) {
@@ -94,21 +141,21 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
       });
       return;
     }
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFaqChange = (index: number, field: 'question' | 'answer', value: string) => {
-    setFormData((prev) => {
+    setForm((prev) => {
       const faqs = [...prev.faqs];
       faqs[index][field] = value;
       return { ...prev, faqs };
     });
   };
   const addFaq = () => {
-    setFormData((prev) => ({ ...prev, faqs: [...prev.faqs, { question: '', answer: '' }] }));
+    setForm((prev) => ({ ...prev, faqs: [...prev.faqs, { question: '', answer: '' }] }));
   };
   const removeFaq = (index: number) => {
-    setFormData((prev) => {
+    setForm((prev) => {
       const faqs = prev.faqs.filter((_, i) => i !== index);
       return { ...prev, faqs };
     });
@@ -121,15 +168,15 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
   const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
       e.preventDefault();
-      if (!formData.tags.includes(tagInput.trim())) {
-        setFormData((prev) => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
+      if (!form.tags.includes(tagInput.trim())) {
+        setForm((prev) => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
       }
       setTagInput('');
     }
   };
 
   const handleRemoveTag = (tag: string) => {
-    setFormData((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }));
+    setForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }));
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,10 +211,58 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
     }
   };
 
+  const handleGenerateWithAi = async () => {
+    const title = form.title.trim();
+    if (!title) {
+      toast.error('Please enter a title first');
+      return;
+    }
+
+    setIsAiGenerating(true);
+    try {
+      const data = await apiFetchJson<GeneratePostApiResponse>('/api/generate-post/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+
+      const raw = data as unknown as Record<string, unknown>;
+      const content =
+        (typeof data.content === 'string' && data.content) ||
+        (typeof raw.Content === 'string' && raw.Content) ||
+        '';
+      if (!content.trim()) {
+        toast.error('AI returned empty content');
+        return;
+      }
+
+      const summary = typeof data.summary === 'string' ? data.summary.trim() : '';
+      const faqRows = parseFaqPipeStrings(Array.isArray(data.faqs) ? data.faqs : []);
+      const faqsNext = faqRows.length > 0 ? faqRows : [{ question: '', answer: '' }];
+      const tagsNext = tagsFromTitleWords(title);
+
+      // On submit, `faqs_json` is built as JSON.stringify(form.faqs) — keep [{ question, answer }, ...] in state.
+      setForm((prev) => ({
+        ...prev,
+        content,
+        ...(summary ? { excerpt: summary, articleSummary: summary } : {}),
+        faqs: faqsNext,
+        tags: tagsNext,
+      }));
+
+      toast.success('Draft generated — review before publishing');
+    } catch (err) {
+      console.error('AI generate failed:', err);
+      toast.error(err instanceof Error ? err.message : 'AI generation failed');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.content || !formData.category || !formData.slug) {
+    if (!form.title || !form.content || !form.category || !form.slug) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -176,18 +271,18 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
 
     try {
       const payload = new FormData();
-      payload.append('title', formData.title);
-      payload.append('excerpt', formData.excerpt);
-      payload.append('content', formData.content);
-      payload.append('author', formData.author);
-      payload.append('read_time', formData.readTime || '');
-      payload.append('category', formData.category || '');
-      payload.append('slug', formData.slug);
+      payload.append('title', form.title);
+      payload.append('excerpt', form.excerpt);
+      payload.append('content', form.content);
+      payload.append('author', form.author);
+      payload.append('read_time', form.readTime || '');
+      payload.append('category', form.category || '');
+      payload.append('slug', form.slug);
       // Public site only shows published posts for non-staff users.
       payload.append('status', 'published');
-      payload.append('article_summary', formData.articleSummary);
-      payload.append('faqs_json', JSON.stringify(formData.faqs));
-      payload.append('tags', JSON.stringify(formData.tags));
+      payload.append('article_summary', form.articleSummary);
+      payload.append('faqs_json', JSON.stringify(form.faqs));
+      payload.append('tags', JSON.stringify(form.tags));
 
       if (selectedImage instanceof File) {
         payload.append('image', selectedImage);
@@ -218,7 +313,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
       }
 
       if (!isEditing) {
-        setFormData({
+        setForm({
           title: '',
           excerpt: '',
           content: '',
@@ -260,7 +355,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                   <Label htmlFor="title">Title *</Label>
                   <Input
                     id="title"
-                    value={formData.title}
+                    value={form.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     placeholder="Enter blog post title..."
                     required
@@ -271,7 +366,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                   <Label htmlFor="slug">Slug</Label>
                   <Input
                     id="slug"
-                    value={formData.slug}
+                    value={form.slug}
                     onChange={(e) => handleInputChange('slug', e.target.value)}
                     placeholder="blog-post-url-slug"
                   />
@@ -284,7 +379,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                   <Label htmlFor="excerpt">Excerpt</Label>
                   <Textarea
                     id="excerpt"
-                    value={formData.excerpt}
+                    value={form.excerpt}
                     onChange={(e) => handleInputChange('excerpt', e.target.value)}
                     placeholder="Brief description..."
                     rows={3}
@@ -292,9 +387,28 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                 </div>
 
                 <div>
-                  <Label>Content *</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
+                    <Label>Content *</Label>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={isAiGenerating || isSubmitting}
+                      onClick={() => void handleGenerateWithAi()}
+                      className="shrink-0"
+                    >
+                      {isAiGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Generating…
+                        </>
+                      ) : (
+                        <>🤖 Generate with AI</>
+                      )}
+                    </Button>
+                  </div>
                   <RichTextEditor
-                    content={formData.content}
+                    content={form.content}
                     onChange={(content) => handleInputChange('content', content)}
                   />
                 </div>
@@ -308,7 +422,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
               <CardContent>
                 <Textarea
                   id="articleSummary"
-                  value={formData.articleSummary}
+                  value={form.articleSummary}
                   onChange={(e) => handleInputChange('articleSummary', e.target.value)}
                   placeholder="Short summary of the article..."
                   rows={3}
@@ -321,7 +435,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                 <CardTitle>FAQs</CardTitle>
               </CardHeader>
               <CardContent>
-                {formData.faqs.map((faq, idx) => (
+                {form.faqs.map((faq, idx) => (
                   <div key={idx} className="mb-4 flex gap-2 items-center">
                     <Input
                       placeholder="Question"
@@ -404,7 +518,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                   <Label htmlFor="author">Author</Label>
                   <Input
                     id="author"
-                    value={formData.author}
+                    value={form.author}
                     onChange={(e) => handleInputChange('author', e.target.value)}
                   />
                 </div>
@@ -412,7 +526,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                   <Label htmlFor="readTime">Read Time</Label>
                   <Input
                     id="readTime"
-                    value={formData.readTime}
+                    value={form.readTime}
                     onChange={(e) => handleInputChange('readTime', e.target.value)}
                     placeholder="e.g., 5 min"
                   />
@@ -420,7 +534,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                 <div>
                   <Label htmlFor="category">Category *</Label>
                   <Select
-                    value={formData.category}
+                    value={form.category}
                     onValueChange={(val) => handleInputChange('category', val)}
                   >
                     <SelectTrigger>
@@ -439,7 +553,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
                 <div>
                   <Label htmlFor="tags">Tags</Label>
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {formData.tags.map((tag) => (
+                    {form.tags.map((tag) => (
                       <span
                         key={tag}
                         className="inline-flex items-center bg-gray-200 rounded px-2 py-1 text-xs font-medium"
@@ -493,12 +607,12 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
           </CardHeader>
           <CardContent>
             <div className="prose max-w-none rich-text-content">
-              <h1>{formData.title || 'Untitled Post'}</h1>
+              <h1>{form.title || 'Untitled Post'}</h1>
               {imagePreview && (
                 <img src={imagePreview} alt="Featured" className="w-full h-64 object-cover rounded-lg" />
               )}
-              {formData.excerpt && <p className="text-gray-600 italic">{formData.excerpt}</p>}
-              <div dangerouslySetInnerHTML={{ __html: formData.content }} />
+              {form.excerpt && <p className="text-gray-600 italic">{form.excerpt}</p>}
+              <div dangerouslySetInnerHTML={{ __html: form.content }} />
             </div>
           </CardContent>
         </Card>
