@@ -152,7 +152,11 @@ export async function apiFetchJsonTryPaths<T>(paths: string[], init: RequestInit
     }
     return text ? (JSON.parse(text) as T) : (null as unknown as T);
   }
-  throw lastErr ?? new Error('All generation endpoints returned 404');
+  throw new Error(
+    "AI is not available on this API: every generation URL returned 404. " +
+      "Your backend (VITE_API_URL) must be a deploy that includes the latest config/urls.py. " +
+      "Redeploy the Django service, then in the browser open .../api/ai/ready/ and confirm JSON { ok: true, v: 2 }.",
+  );
 }
 
 export async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
