@@ -220,11 +220,10 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
 
     setIsAiGenerating(true);
     try {
-      const paths = [
-        (import.meta.env.VITE_API_AI_DRAFT_PATH as string) || '/api/ai/draft/',
-        '/ai-generate/',
-        '/api/generate-post/',
-      ];
+      const custom = (import.meta.env.VITE_API_AI_DRAFT_PATH as string) || '';
+      const paths = custom
+        ? [custom, '/api/generate-post/', '/api/ai/draft/', '/ai-generate/']
+        : ['/api/generate-post/', '/api/ai/draft/', '/ai-generate/'];
       const data = await apiFetchJsonTryPaths<GeneratePostApiResponse>(paths, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

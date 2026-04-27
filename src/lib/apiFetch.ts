@@ -133,19 +133,26 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
 
 /** Tries each path in order; on HTTP 404 only, continues to the next (for live deploys with different route tables). */
 export async function apiFetchJsonTryPaths<T>(paths: string[], init: RequestInit): Promise<T> {
-  let last: unknown;
+  let lastErr: Error | null = null;
   for (const p of paths) {
-    try {
-      return await apiFetchJson<T>(p, init);
-    } catch (e) {
-      last = e;
-      const m = e instanceof Error ? e.message : String(e);
-      if (/\b404\b|Not Found|page not found/i.test(m)) continue;
-      throw e;
+    const res = await apiFetch(p, init);
+    if (res.status === 404) {
+      lastErr = new Error(`HTTP 404: ${p}`);
+      continue;
     }
+    const text = await res.text();
+    if (!res.ok) {
+      let parsed: unknown;
+      try {
+        parsed = text ? JSON.parse(text) : {};
+      } catch {
+        parsed = null;
+      }
+      throw new Error(parseErrorBody(parsed, text, res.status) || res.statusText);
+    }
+    return text ? (JSON.parse(text) as T) : (null as unknown as T);
   }
-  if (last instanceof Error) throw last;
-  throw new Error(String(last));
+  throw lastErr ?? new Error('All generation endpoints returned 404');
 }
 
 export async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
