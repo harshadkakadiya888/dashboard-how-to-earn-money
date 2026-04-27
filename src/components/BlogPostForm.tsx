@@ -55,20 +55,36 @@ type GeneratePostApiResponse = {
   title?: string;
   content?: string;
   summary?: string;
-  faqs?: string[];
+  /** Backend sends "question|||answer" strings; some models return objects (handled in parser). */
+  faqs?: string[] | { question?: string; answer?: string; q?: string; a?: string }[];
+  tags?: string[];
 };
 
-/** "Q1|||A1" → { question: "Q1", answer: "A1" } */
-function parseFaqPipeStrings(items: string[]): { question: string; answer: string }[] {
-  return items
-    .map((s) => {
-      const t = String(s).trim();
-      if (!t) return null;
-      const idx = t.indexOf('|||');
-      if (idx === -1) return { question: t, answer: '' };
-      return { question: t.slice(0, idx).trim(), answer: t.slice(idx + 3).trim() };
+type FaqRow = { question: string; answer: string };
+
+/**
+ * Map API faqs to UI rows. Accepts "Q|||A" strings, objects, or the placeholder "|||".
+ */
+function parseFaqItems(faqs: unknown): FaqRow[] {
+  if (!Array.isArray(faqs) || !faqs.length) return [];
+  return faqs
+    .map((it): FaqRow | null => {
+      if (typeof it === 'string') {
+        const t = it.trim();
+        if (!t || t === '|||') return null;
+        const idx = t.indexOf('|||');
+        if (idx === -1) return { question: t, answer: '' };
+        return { question: t.slice(0, idx).trim(), answer: t.slice(idx + 3).trim() };
+      }
+      if (it && typeof it === 'object') {
+        const o = it as Record<string, unknown>;
+        const q = String(o.question ?? o.q ?? '').trim();
+        const a = String(o.answer ?? o.a ?? '').trim();
+        if (q || a) return { question: q, answer: a };
+      }
+      return null;
     })
-    .filter((x): x is { question: string; answer: string } => Boolean(x && (x.question || x.answer)));
+    .filter((x): x is FaqRow => Boolean(x && (x.question || x.answer)));
 }
 
 /** Tags from the first `maxWords` words of the title (normalized, deduped). */
@@ -241,9 +257,14 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
       }
 
       const summary = typeof data.summary === 'string' ? data.summary.trim() : '';
-      const faqRows = parseFaqPipeStrings(Array.isArray(data.faqs) ? data.faqs : []);
+      const gen = data as GeneratePostApiResponse;
+      const faqRows = parseFaqItems(gen.faqs);
       const faqsNext = faqRows.length > 0 ? faqRows : [{ question: '', answer: '' }];
-      const tagsNext = tagsFromTitleWords(title);
+      const tagsFromApi =
+        gen.tags != null && Array.isArray(gen.tags)
+          ? [...new Set(gen.tags.map((t) => String(t).trim().toLowerCase()).filter(Boolean))]
+          : null;
+      const tagsNext = tagsFromApi !== null ? tagsFromApi : tagsFromTitleWords(title);
 
       // On submit, `faqs_json` is built as JSON.stringify(form.faqs) — keep [{ question, answer }, ...] in state.
       setForm((prev) => ({
