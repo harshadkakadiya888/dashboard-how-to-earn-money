@@ -5,7 +5,12 @@ const API_BASE = API;
 
 export function apiUrl(path: string): string {
   if (path.startsWith('http')) return path;
-  return `${API_BASE}${path}`;
+  const p = path.startsWith('/') ? path : `/${path}`;
+  // If VITE_API_URL already ends with /api and path is /api/... avoid /api/api/... (common live 404)
+  if (p.startsWith('/api/') && /\/api$/i.test(API_BASE)) {
+    return `${API_BASE}${p.slice(4)}`;
+  }
+  return `${API_BASE}${p}`;
 }
 
 function readAccessToken(): string | null {
