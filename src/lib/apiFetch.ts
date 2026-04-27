@@ -131,6 +131,23 @@ export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise
   return text ? (JSON.parse(text) as T) : (null as unknown as T);
 }
 
+/** Tries each path in order; on HTTP 404 only, continues to the next (for live deploys with different route tables). */
+export async function apiFetchJsonTryPaths<T>(paths: string[], init: RequestInit): Promise<T> {
+  let last: unknown;
+  for (const p of paths) {
+    try {
+      return await apiFetchJson<T>(p, init);
+    } catch (e) {
+      last = e;
+      const m = e instanceof Error ? e.message : String(e);
+      if (/\b404\b|Not Found|page not found/i.test(m)) continue;
+      throw e;
+    }
+  }
+  if (last instanceof Error) throw last;
+  throw new Error(String(last));
+}
+
 export async function apiFetchVoid(path: string, init?: RequestInit): Promise<void> {
   const res = await apiFetch(path, init);
   if (!res.ok) {

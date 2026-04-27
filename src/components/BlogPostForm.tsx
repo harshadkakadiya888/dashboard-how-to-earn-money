@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import RichTextEditor from './RichTextEditor';
 import { toast } from 'sonner';
 import { ImageIcon, Loader2, Save, Eye, X } from 'lucide-react';
-import { apiFetch, apiFetchJson, apiUrl } from '@/lib/apiFetch';
+import { apiFetch, apiFetchJsonTryPaths, apiUrl } from '@/lib/apiFetch';
 
 interface Category {
   _id: string;
@@ -50,7 +50,7 @@ type BlogFormState = {
   faqs: { question: string; answer: string }[];
 };
 
-/** Response from POST /api/generate-post/ (structured; backend defaults structured on). */
+/** Response from POST /api/ai/draft/ or /api/generate-post/ (structured; backend defaults structured on). */
 type GeneratePostApiResponse = {
   title?: string;
   content?: string;
@@ -220,7 +220,11 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
 
     setIsAiGenerating(true);
     try {
-      const data = await apiFetchJson<GeneratePostApiResponse>('/api/generate-post/', {
+      const paths = [
+        (import.meta.env.VITE_API_AI_DRAFT_PATH as string) || '/api/ai/draft/',
+        '/api/generate-post/',
+      ];
+      const data = await apiFetchJsonTryPaths<GeneratePostApiResponse>(paths, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
