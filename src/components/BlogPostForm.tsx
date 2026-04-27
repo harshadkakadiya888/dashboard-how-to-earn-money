@@ -222,6 +222,7 @@ const BlogPostForm = ({ categories, onSuccess, curruntPost }: BlogPostFormProps)
     try {
       const paths = [
         (import.meta.env.VITE_API_AI_DRAFT_PATH as string) || '/api/ai/draft/',
+        '/ai-generate/',
         '/api/generate-post/',
       ];
       const data = await apiFetchJsonTryPaths<GeneratePostApiResponse>(paths, {
