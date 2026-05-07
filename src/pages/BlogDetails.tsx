@@ -19,6 +19,7 @@ interface PostDetail {
   author: string;
   read_time: string;
   created_at: string | null;
+  status?: string;
 }
 
 interface BlogComment {
@@ -53,9 +54,12 @@ const BlogDetails = () => {
   const [likers, setLikers] = useState<PostLiker[]>([]);
   const [liking, setLiking] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [slow, setSlow] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const clientIdRef = useRef<string>('');
   const actorRef = useRef<{ username: string; email: string }>({ username: '', email: '' });
+
+  const cacheKey = blogId ? `blog_post_cache:v1:${blogId}` : '';
 
   useEffect(() => {
     let cid = localStorage.getItem('blog_client_id');
@@ -79,18 +83,47 @@ const BlogDetails = () => {
   useEffect(() => {
     const fetchBlog = async () => {
       setLoading(true);
+      setSlow(false);
+
+      // Show last cached post immediately (fast UX), then refresh in background.
+      if (cacheKey) {
+        try {
+          const raw = localStorage.getItem(cacheKey);
+          if (raw) {
+            const parsed = JSON.parse(raw) as { at: number; data: PostDetail };
+            const ageMs = Date.now() - (parsed?.at || 0);
+            if (parsed?.data && ageMs >= 0 && ageMs < 30 * 60 * 1000) {
+              setBlog(parsed.data);
+              setLoading(false);
+            }
+          }
+        } catch {
+          // ignore cache parse errors
+        }
+      }
+
+      const controller = new AbortController();
+      const slowTimer = window.setTimeout(() => setSlow(true), 3000);
       try {
-        const data = await apiFetchJson<PostDetail>(`/api/posts/${blogId}/`);
+        const data = await apiFetchJson<PostDetail>(`/api/posts/${blogId}/`, { signal: controller.signal });
         setBlog(data);
+        if (cacheKey) {
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), data }));
+          } catch {
+            // ignore storage quota issues
+          }
+        }
       } catch {
         toast.error('Failed to load blog');
         setBlog(null);
       } finally {
+        window.clearTimeout(slowTimer);
         setLoading(false);
       }
     };
     fetchBlog();
-  }, [blogId]);
+  }, [blogId, cacheKey]);
 
   useEffect(() => {
     const fetchLikeStatus = async () => {
@@ -212,7 +245,45 @@ const BlogDetails = () => {
     }
   };
 
-  if (loading) return <div>Loading blog...</div>;
+  if (loading && !blog) {
+    return (
+      <div className="space-y-4">
+        {slow && (
+          <div className="rounded-md border border-muted bg-muted/30 p-3 text-sm text-muted-foreground">
+            This is taking longer than usual. The server may be waking up (cold start). Please wait a moment…
+          </div>
+        )}
+        <Card>
+          <CardHeader>
+            <div className="h-7 w-2/3 rounded bg-muted animate-pulse" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="h-4 w-1/3 rounded bg-muted animate-pulse" />
+            <div className="h-40 w-full rounded bg-muted animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-4 w-full rounded bg-muted animate-pulse" />
+              <div className="h-4 w-11/12 rounded bg-muted animate-pulse" />
+              <div className="h-4 w-10/12 rounded bg-muted animate-pulse" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  if (loading && blog) {
+    return (
+      <div className="space-y-4">
+        {slow && (
+          <div className="rounded-md border border-muted bg-muted/30 p-3 text-sm text-muted-foreground">
+            Refreshing… this is taking longer than usual (possible cold start).
+          </div>
+        )}
+        <div className="opacity-70">
+          <div>Loading latest blog…</div>
+        </div>
+      </div>
+    );
+  }
   if (!blog) return <div>Blog not found.</div>;
 
   return (
