@@ -171,7 +171,7 @@ const PostsPage = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Blog Posts</h1>
+        <h1 className="text-2xl font-bold">LIVE API POSTS</h1>
         <div className="flex gap-2 items-center">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
