@@ -14,60 +14,57 @@ const Index = () => {
   const [posts, setPosts] = useState<DashboardPost[]>([]);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [analytics, setAnalytics] = useState<PostViewsAnalytics | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+    setPostsLoading(true);
+    setError(null);
+
+    fetch("https://django-how-to-earn-money.onrender.com/api/posts/", {
+      cache: "no-store",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setPosts(Array.isArray(data?.posts) ? data.posts : []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setPosts([]);
+        setError('Could not load dashboard posts.');
+      })
+      .finally(() => setPostsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const fetchMeta = async () => {
+      setMetaLoading(true);
       try {
-        const [postsResult, categoriesResult] = await Promise.allSettled([
-          apiFetchJson<{ posts: DashboardPost[] }>('/api/posts/'),
-          apiFetchJson<{ categories: CategoryRow[] }>('/api/categories/'),
-        ]);
+        const categoriesRes = await apiFetchJson<{ categories: CategoryRow[] }>('/api/categories/');
+        setCategories(Array.isArray(categoriesRes.categories) ? categoriesRes.categories : []);
+      } catch {
+        setCategories([]);
+      }
 
-        const postsOk = postsResult.status === 'fulfilled';
-        const categoriesOk = categoriesResult.status === 'fulfilled';
-
-        if (postsOk) {
-          const postsRes = postsResult.value;
-          setPosts(Array.isArray(postsRes.posts) ? postsRes.posts : []);
-        } else {
-          setPosts([]);
-        }
-
-        if (categoriesOk) {
-          const categoriesRes = categoriesResult.value;
-          setCategories(Array.isArray(categoriesRes.categories) ? categoriesRes.categories : []);
-        } else {
-          setCategories([]);
-        }
-
-        if (!postsOk && !categoriesOk) {
-          throw new Error('Could not load posts and categories.');
-        }
-
-        try {
-          const a = await apiFetchJson<PostViewsAnalytics>('/api/analytics/post-views/');
-          setAnalytics(a && Array.isArray(a.chart_series) ? a : null);
-        } catch {
-          setAnalytics(null);
-        }
-      } catch (e) {
-        console.error('Error fetching data:', e);
-        setError('Could not load dashboard data.');
+      try {
+        const a = await apiFetchJson<PostViewsAnalytics>('/api/analytics/post-views/');
+        setAnalytics(a && Array.isArray(a.chart_series) ? a : null);
+      } catch {
+        setAnalytics(null);
       } finally {
-        setLoading(false);
+        setMetaLoading(false);
       }
     };
-    fetchData();
+    fetchMeta();
   }, []);
 
   const sortedPosts = useMemo(
     () => [...posts].sort((a, b) => b.id - a.id),
     [posts]
   );
+
+  const loading = postsLoading || metaLoading;
 
   if (loading) {
     return <div>Loading...</div>;
