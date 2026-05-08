@@ -46,7 +46,20 @@ const PostsPage = () => {
     })
       .then((res) => res.json())
       .then((data) => {
-        setPosts(Array.isArray(data?.posts) ? data.posts : []);
+        console.log("LIVE API POSTS", data);
+        const list: PostRow[] = Array.isArray(data?.posts) ? data.posts : [];
+        // Newest first (prefer created_at, fallback to id)
+        list.sort((a, b) => {
+          const at = a?.created_at ? new Date(a.created_at).getTime() : NaN;
+          const bt = b?.created_at ? new Date(b.created_at).getTime() : NaN;
+          const atOk = Number.isFinite(at);
+          const btOk = Number.isFinite(bt);
+          if (atOk && btOk) return bt - at;
+          if (atOk && !btOk) return -1;
+          if (!atOk && btOk) return 1;
+          return (b?.id ?? 0) - (a?.id ?? 0);
+        });
+        setPosts(list);
       })
       .catch((err) => {
         console.error(err);
