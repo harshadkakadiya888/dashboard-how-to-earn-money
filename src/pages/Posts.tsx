@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Search, Eye, Calendar, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { stripHtml } from '@/lib/html';
-import { apiFetchVoid } from '@/lib/apiFetch';
+import { apiFetchJson, apiFetchVoid } from '@/lib/apiFetch';
 import {
   Pagination,
   PaginationContent,
@@ -38,15 +38,12 @@ const PostsPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    fetch("https://django-how-to-earn-money.onrender.com/api/posts/", {
-      cache: "no-store",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log("LIVE API POSTS", data);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiFetchJson<{ posts: PostRow[] }>('/api/posts/', { cache: 'no-store' });
         const list: PostRow[] = Array.isArray(data?.posts) ? data.posts : [];
         // Newest first (prefer created_at, fallback to id)
         list.sort((a, b) => {
@@ -59,14 +56,20 @@ const PostsPage = () => {
           if (!atOk && btOk) return 1;
           return (b?.id ?? 0) - (a?.id ?? 0);
         });
-        setPosts(list);
-      })
-      .catch((err) => {
+        if (!cancelled) setPosts(list);
+      } catch (err) {
         console.error(err);
-        setError('Could not load posts.');
-        toast.error('Failed to load posts');
-      })
-      .finally(() => setLoading(false));
+        if (!cancelled) {
+          setError('Could not load posts.');
+          toast.error(err instanceof Error ? err.message : 'Failed to load posts');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

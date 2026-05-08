@@ -19,22 +19,26 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPostsLoading(true);
-    setError(null);
-
-    fetch("https://django-how-to-earn-money.onrender.com/api/posts/", {
-      cache: "no-store",
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setPosts(Array.isArray(data?.posts) ? data.posts : []);
-      })
-      .catch((err) => {
+    let cancelled = false;
+    (async () => {
+      setPostsLoading(true);
+      setError(null);
+      try {
+        const data = await apiFetchJson<{ posts: DashboardPost[] }>('/api/posts/', { cache: 'no-store' });
+        if (!cancelled) setPosts(Array.isArray(data?.posts) ? data.posts : []);
+      } catch (err) {
         console.error(err);
-        setPosts([]);
-        setError('Could not load dashboard posts.');
-      })
-      .finally(() => setPostsLoading(false));
+        if (!cancelled) {
+          setPosts([]);
+          setError(err instanceof Error ? err.message : 'Could not load dashboard posts.');
+        }
+      } finally {
+        if (!cancelled) setPostsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
