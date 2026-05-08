@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Search, Eye, Calendar, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { stripHtml } from '@/lib/html';
-import { apiFetchJson, apiFetchVoid } from '@/lib/apiFetch';
+import { apiFetchVoid } from '@/lib/apiFetch';
 import {
   Pagination,
   PaginationContent,
@@ -37,21 +37,24 @@ const PostsPage = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  const loadPosts = async () => {
+  useEffect(() => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await apiFetchJson<{ posts: PostRow[] }>('/api/posts/');
-      const list = Array.isArray(res.posts) ? res.posts : [];
-      setPosts(list);
-    } catch (e) {
-      console.error('Failed to fetch posts:', e);
-      setError('Could not load posts. Is the API running?');
-      toast.error('Failed to load posts');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+    fetch("https://django-how-to-earn-money.onrender.com/api/posts/", {
+      cache: "no-store",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setPosts(Array.isArray(data?.posts) ? data.posts : []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('Could not load posts.');
+        toast.error('Failed to load posts');
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -89,10 +92,6 @@ const PostsPage = () => {
     window.history.replaceState({}, '', url.toString());
   }, [currentPage, debouncedSearchTerm]);
 
-  useEffect(() => {
-    loadPosts();
-  }, []);
-
   const filteredPosts = useMemo(() => {
     const q = debouncedSearchTerm.trim().toLowerCase();
     if (!q) return posts;
@@ -126,7 +125,7 @@ const PostsPage = () => {
     try {
       await apiFetchVoid(`/api/posts/${id}/`, { method: 'DELETE' });
       toast.success('Post deleted');
-      await loadPosts();
+      setPosts((prev) => prev.filter((p) => p.id !== id));
     } catch (e) {
       console.error(e);
       toast.error('Failed to delete post');
