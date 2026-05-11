@@ -1,7 +1,8 @@
 import ViewsChart from "../components/ViewsChart";
-import { FileText, Folder, Activity, DollarSign, ArrowUpRight } from 'lucide-react';
+import { FileText, Folder, Activity, DollarSign, ArrowUpRight, Wand2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   XAxis,
   YAxis,
@@ -15,7 +16,8 @@ import {
   Bar,
 } from 'recharts';
 import { stripHtml } from '@/lib/html';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { apiFetch, apiUrl } from '@/lib/apiFetch';
 
 export interface DashboardPost {
   id: number;
@@ -35,10 +37,13 @@ export default function Dashboard({
   posts,
   categories,
   analytics,
+  onPostsUpdated,
 }: {
   posts: DashboardPost[];
   categories: { _id?: string; name?: string }[];
   analytics: PostViewsAnalytics | null;
+  /** Refetch posts (and optionally analytics) after a successful remote blog generation. */
+  onPostsUpdated?: () => void | Promise<void>;
 }) {
   const contentOverviewData = useMemo(() => {
     const now = new Date();
@@ -91,6 +96,67 @@ export default function Dashboard({
     }).length;
   }, [posts]);
 
+  const [isGeneratingBlog, setIsGeneratingBlog] = useState(false);
+
+  const handleGenerateBlog = useCallback(async () => {
+    const path = '/api/run-blog/';
+    const url = apiUrl(path);
+    setIsGeneratingBlog(true);
+    try {
+      console.info('[AI Blog Generator] GET', url);
+      const response = await apiFetch(path, { method: 'GET', cache: 'no-store' });
+      const text = await response.text();
+      console.log('[AI Blog Generator] response', {
+        url,
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        bodyPreview: text.slice(0, 800),
+      });
+
+      let data: { status?: string; ok?: boolean; detail?: string } = {};
+      try {
+        data = text ? (JSON.parse(text) as typeof data) : {};
+      } catch (parseErr) {
+        console.error('[AI Blog Generator] invalid JSON', parseErr);
+        toast.error('Failed to generate blog', {
+          description: 'Server did not return JSON. Check API URL and deployment.',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        const desc =
+          typeof data.detail === 'string' && data.detail.trim()
+            ? data.detail.trim()
+            : `Request failed (${response.status})`;
+        console.error('[AI Blog Generator] error response', desc);
+        toast.error('Failed to generate blog', { description: desc });
+        return;
+      }
+
+      const succeeded = data.status === 'success' || data.ok === true;
+      if (!succeeded) {
+        const desc =
+          typeof data.detail === 'string' && data.detail.trim()
+            ? data.detail.trim()
+            : 'Generation did not complete successfully.';
+        console.error('[AI Blog Generator] unexpected payload', data);
+        toast.error('Failed to generate blog', { description: desc });
+        return;
+      }
+
+      toast.success('Blog generated successfully');
+      await onPostsUpdated?.();
+    } catch (err) {
+      console.error('[AI Blog Generator] request failed', err);
+      toast.error('Failed to generate blog', {
+        description: err instanceof Error ? err.message : 'Network or server error.',
+      });
+    } finally {
+      setIsGeneratingBlog(false);
+    }
+  }, [onPostsUpdated]);
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
@@ -135,6 +201,42 @@ export default function Dashboard({
           </CardContent>
         </Card>
       </div>
+
+      <Card className="overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.06] shadow-sm ring-1 ring-border/60">
+        <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Wand2 className="h-4 w-4" aria-hidden />
+              </span>
+              <CardTitle className="text-lg">AI Blog Generator</CardTitle>
+            </div>
+            <CardDescription className="text-sm leading-relaxed sm:max-w-xl">
+              Generate trending AI-powered blog posts instantly.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            onClick={handleGenerateBlog}
+            disabled={isGeneratingBlog}
+            className="shrink-0 gap-2 shadow-sm sm:self-center"
+            size="default"
+          >
+            {isGeneratingBlog ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-4 w-4" aria-hidden />
+                Generate Blog
+              </>
+            )}
+          </Button>
+        </CardHeader>
+      </Card>
+
       <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader className="flex flex-row items-center">

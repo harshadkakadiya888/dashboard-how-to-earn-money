@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Dashboard, { type DashboardPost, type PostViewsAnalytics } from './Dashboard';
 import { apiFetchJson } from '@/lib/apiFetch';
 
@@ -17,6 +17,21 @@ const Index = () => {
   const [postsLoading, setPostsLoading] = useState(true);
   const [metaLoading, setMetaLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshPostsAndAnalytics = useCallback(async () => {
+    try {
+      const [postsRes, analyticsRes] = await Promise.all([
+        apiFetchJson<{ posts: DashboardPost[] }>('/api/posts/', { cache: 'no-store' }),
+        apiFetchJson<PostViewsAnalytics>('/api/analytics/post-views/').catch(() => null),
+      ]);
+      setPosts(Array.isArray(postsRes?.posts) ? postsRes.posts : []);
+      if (analyticsRes && Array.isArray(analyticsRes.chart_series)) {
+        setAnalytics(analyticsRes);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +99,12 @@ const Index = () => {
 
   return (
     <div>
-      <Dashboard posts={sortedPosts} categories={categories} analytics={analytics} />
+      <Dashboard
+        posts={sortedPosts}
+        categories={categories}
+        analytics={analytics}
+        onPostsUpdated={refreshPostsAndAnalytics}
+      />
     </div>
   );
 };
