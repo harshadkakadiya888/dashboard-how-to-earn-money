@@ -35,11 +35,14 @@ export interface PostViewsAnalytics {
 
 export default function Dashboard({
   posts,
+  totalPostCount,
   categories,
   analytics,
   onPostsUpdated,
 }: {
   posts: DashboardPost[];
+  /** Full count from `/api/posts/` pagination (list may be capped by `limit`). */
+  totalPostCount: number;
   categories: { _id?: string; name?: string }[];
   analytics: PostViewsAnalytics | null;
   /** Refetch posts (and optionally analytics) after a successful remote blog generation. */
@@ -176,7 +179,7 @@ export default function Dashboard({
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{posts.length}</div>
+            <div className="text-2xl font-bold">{totalPostCount}</div>
             <p className="text-xs text-muted-foreground">Across all categories</p>
           </CardContent>
         </Card>
